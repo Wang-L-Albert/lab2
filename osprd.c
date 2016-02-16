@@ -33,8 +33,8 @@
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("CS 111 RAM Disk");
-// EXERCISE: Pass your names into the kernel as the module's authors.
-MODULE_AUTHOR("Skeletor");
+// ------DONE------------ EXERCISE: Pass your names into the kernel as the module's authors.
+MODULE_AUTHOR("Albert Wang and Lauren Yeung");
 
 #define OSPRD_MAJOR	222
 
@@ -121,6 +121,21 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	// 'req->buffer' members, and the rq_data_dir() function.
 
 	// Your code here.
+
+	unsigned int requestType;
+	uint8_t *dataPtr;
+	int dataSize = req->current_nr_sectors * SECTOR_SIZE;
+
+	requestType = rq_data_dir(req); //get the request type
+	dataPtr = d->data + (req->sector * SECTOR_SIZE); //get a pointer to the location on disk where we need to write
+	
+	if(requestType == READ){
+		memcpy((void*) req->buffer, (void*) dataPtr, dataSize);
+	} else if (requestType == WRITE){
+		memcpy((void*) dataPtr, (void*) req->buffer, dataSize);
+	}
+	
+
 	eprintk("Should process request...\n");
 
 	end_request(req, 1);
