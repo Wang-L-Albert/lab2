@@ -189,13 +189,23 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		if (d->numReadLocks != 0){//clear any read locks associated with process on the file
 			readerNode *traverse;
 			traverse = d->readerListHead;
-			while (traverse != NULL){
+			//spot check if there's only one node
+			while (traverse->next != NULL){
 				if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
+					//check if we're at the last
 					readerNode *temp = traverse; //get a temp to point to current node so we can delete
 					traverse->prev->next = traverse->next;//re-link
 					traverse->next->prev = traverse->prev;
+					if(traverse == d->readerListHead){//if we're at the head, we need to change the head ptr
+						d->readerListHead = traverse->next;
+					}
 					traverse = traverse->next; //advance traverser
 					free(temp);
+				}
+			}
+			if (traverse->next == NULL){
+				if(traverse->pid == current->pid){
+					traverse->pid = 0;
 				}
 			}
 		}
@@ -277,10 +287,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-
-
-
-
 		unsigned ticket;
 		if (filp_writable){ //if file is open for writing
 			osp_spin_lock(&(d->mutex);
@@ -288,8 +294,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			d->ticket_tail++;
 			//now we block until there's no other tickets in front of us.
 			wait_event_interruptible(d->blockq, d->ticket_head == ticket);
-		} else {
-
 		}
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
