@@ -44,6 +44,16 @@ MODULE_AUTHOR("Albert Wang and Lauren Yeung");
 static int nsectors = 32;
 module_param(nsectors, int, 0);
 
+struct ticketNode {
+	int ticketNum;
+	struct ticketNode *prev;
+	struct ticketNode *next;
+}
+struct readerNode {
+	pid_t pid;
+	struct readerNode *prev;
+	struct readerNode *next;
+}
 
 /* The internal representation of our device. */
 typedef struct osprd_info {
@@ -61,6 +71,11 @@ typedef struct osprd_info {
 
 	wait_queue_head_t blockq;       // Wait queue for tasks blocked on
 					// the device lock
+	int numReadLocks; //tracks how many files reading from disk, multiple allowed
+	bool isWriteLocked; //tracks if currently being written to
+	struct ticketNode *ticketListHead;
+	struct readerNode *readerListHead;
+
 
 	/* HINT: You may want to add additional fields to help
 	         in detecting deadlock. */
@@ -168,16 +183,27 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 
 		// Your code here.
 		//release lock //wake up all tasks blocked by filp holding the lock
-		osp_spin_lock(d->mutex); //lock our current ramdisk file to work on
-		if (filp->f_flags & F_OSPRD_LOCKED){//if file is locked
+		osp_spin_lock(&(d->mutex)); //lock our current ramdisk file to work on
+		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
 			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
 			wake_up_all(d->blockq); //wake up all tasks blocked by filp holding the lock
-
 		}
-		osp_spin_unlock(d->mutex);
-		//find blocked processes
-
-
+		osp_spin_unlock(&(d->mutex));
+		//release all locks current process holds
+		if (numReadLocks != 0){
+			readerNode *traverse;
+			traverse = readerListHead;
+			while (traverse != NULL){
+				if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
+					rederNode *temp = traverse; //get a temp to point to current node so we can delete
+					traverse->prev->next = traverse->next;//re-link
+					traverse->next->prev = traverse->prev;
+					traverse = traverse->next; //advance traverser
+					free(temp);
+				}
+			}
+		}
+		//current->pid
 
 
 		// This line avoids compiler warnings; you may remove it.
@@ -249,8 +275,20 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to acquire\n");
-		r = -ENOTTY;
+
+
+
+
+		unsigned ticket;
+		if (filp_writable){ //if file is open for writing
+			osp_spin_lock(&(d->mutex);
+			ticket = d->ticket_tail; //set own ticket number to ticket_tail, the next available ticket slot;
+			d->ticket_tail++;
+			//now we block until there's no other tickets in front of us.
+			wait_event_interruptible(d->blockq, d->ticket_head == ticket);
+		} else {
+
+		}
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
@@ -292,6 +330,14 @@ static void osprd_setup(osprd_info_t *d)
 	osp_spin_lock_init(&d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
+	numReadLocks = 0;
+	numWriteLocks = 0;
+	ticketListHead = malloc(sizeof(struct ticketNode));
+	ticketListHead->ticketNum = 0;
+	ticketListHead->next = NULL;
+	readerListHead = malloc(sizeof(struct readerNode));
+	readerListHead->pid = 0;
+	readerListHead->next = NULL;
 }
 
 
