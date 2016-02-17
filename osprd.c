@@ -112,7 +112,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		return;
 	}
 
-	// EXERCISE: Perform the read or write request by copying data between
+	// -----DONE?------EXERCISE: Perform the read or write request by copying data between
 	// our data array and the request's buffer.
 	// Hint: The 'struct request' argument tells you what kind of request
 	// this is, and which sectors are being read or written.
@@ -124,17 +124,17 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	unsigned int requestType;
 	uint8_t *dataPtr;
-	int dataSize = req->current_nr_sectors * SECTOR_SIZE;
+	int dataSize = req->current_nr_sectors * SECTOR_SIZE; //size of data to be copied, nr_sectors is num sectors to be copied
 
 	requestType = rq_data_dir(req); //get the request type
 	dataPtr = d->data + (req->sector * SECTOR_SIZE); //get a pointer to the location on disk where we need to write
-	
+
 	if(requestType == READ){
-		memcpy((void*) req->buffer, (void*) dataPtr, dataSize);
+		memcpy((void*) req->buffer, (void*) dataPtr, dataSize); //copy from ramdisk to request's buffer
 	} else if (requestType == WRITE){
-		memcpy((void*) dataPtr, (void*) req->buffer, dataSize);
+		memcpy((void*) dataPtr, (void*) req->buffer, dataSize); //copy from request's buffer to ramdisk
 	}
-	
+
 
 	eprintk("Should process request...\n");
 
@@ -162,11 +162,23 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		osprd_info_t *d = file2osprd(filp);
 		int filp_writable = filp->f_mode & FMODE_WRITE;
 
-		// EXERCISE: If the user closes a ramdisk file that holds
+		// ------DONE?------EXERCISE: If the user closes a ramdisk file that holds
 		// a lock, release the lock.  Also wake up blocked processes
 		// as appropriate.
 
 		// Your code here.
+		//release lock //wake up all tasks blocked by filp holding the lock
+		osp_spin_lock(d->mutex); //lock our current ramdisk file to work on
+		if (filp->f_flags & F_OSPRD_LOCKED){//if file is locked
+			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
+			wake_up_all(d->blockq); //wake up all tasks blocked by filp holding the lock
+
+		}
+		osp_spin_unlock(d->mutex);
+		//find blocked processes
+
+
+
 
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
