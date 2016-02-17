@@ -289,7 +289,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Your code here (instead of the next two lines).
 		unsigned ticket;
 		if (filp_writable){ //if file is open for writing
-			osp_spin_lock(&(d->mutex);
+			osp_spin_lock(&(d->mutex));
 			ticket = d->ticket_tail++; //set own ticket number to ticket_tail, the next available ticket slot;
 			d->ticket_tail++;
 			//now add ticket into the array
