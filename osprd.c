@@ -73,6 +73,7 @@ typedef struct osprd_info {
 					// the device lock
 	int numReadLocks; //tracks how many files reading from disk, multiple allowed
 	bool isWriteLocked; //tracks if currently being written to
+	pid_t writeLockPid;
 	struct ticketNode *ticketListHead;
 	struct readerNode *readerListHead;
 
@@ -184,18 +185,13 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// Your code here.
 		//release lock //wake up all tasks blocked by filp holding the lock
 		osp_spin_lock(&(d->mutex)); //lock our current ramdisk file to work on
-		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
-			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
-			wake_up_all(d->blockq); //wake up all tasks blocked by filp holding the lock
-		}
-		osp_spin_unlock(&(d->mutex));
 		//release all locks current process holds
-		if (numReadLocks != 0){
+		if (d->numReadLocks != 0){//clear any read locks associated with process on the file
 			readerNode *traverse;
-			traverse = readerListHead;
+			traverse = d->readerListHead;
 			while (traverse != NULL){
 				if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
-					rederNode *temp = traverse; //get a temp to point to current node so we can delete
+					readerNode *temp = traverse; //get a temp to point to current node so we can delete
 					traverse->prev->next = traverse->next;//re-link
 					traverse->next->prev = traverse->prev;
 					traverse = traverse->next; //advance traverser
@@ -203,8 +199,14 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 				}
 			}
 		}
-		//current->pid
-
+		if(d->writeLockPid == current->pid){//clear the write lock if the process owns it
+			d->isWriteLocked = false;
+		}
+		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
+			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
+			wake_up_all(d->blockq); //wake up all tasks blocked by filp holding the lock
+		}
+		osp_spin_unlock(&(d->mutex));
 
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
@@ -332,6 +334,7 @@ static void osprd_setup(osprd_info_t *d)
 	/* Add code here if you add fields to osprd_info_t. */
 	numReadLocks = 0;
 	numWriteLocks = 0;
+	writeLockPid = 0;
 	ticketListHead = malloc(sizeof(struct ticketNode));
 	ticketListHead->ticketNum = 0;
 	ticketListHead->next = NULL;
