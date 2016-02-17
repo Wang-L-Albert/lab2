@@ -48,12 +48,12 @@ struct ticketNode {
 	int ticketNum;
 	struct ticketNode *prev;
 	struct ticketNode *next;
-}
+};
 struct readerNode {
 	pid_t pid;
 	struct readerNode *prev;
 	struct readerNode *next;
-}
+};
 
 /* The internal representation of our device. */
 typedef struct osprd_info {
@@ -290,8 +290,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		unsigned ticket;
 		if (filp_writable){ //if file is open for writing
 			osp_spin_lock(&(d->mutex);
-			ticket = d->ticket_tail; //set own ticket number to ticket_tail, the next available ticket slot;
+			ticket = d->ticket_tail++; //set own ticket number to ticket_tail, the next available ticket slot;
 			d->ticket_tail++;
+			//now add ticket into the array
+
 			//now we block until there's no other tickets in front of us.
 			wait_event_interruptible(d->blockq, d->ticket_head == ticket);
 		}
