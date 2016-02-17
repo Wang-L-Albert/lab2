@@ -72,7 +72,7 @@ typedef struct osprd_info {
 	wait_queue_head_t blockq;       // Wait queue for tasks blocked on
 					// the device lock
 	int numReadLocks; //tracks how many files reading from disk, multiple allowed
-	bool isWriteLocked; //tracks if currently being written to
+	int isWriteLocked; //tracks if currently being written to
 	pid_t writeLockPid;
 	struct ticketNode *ticketListHead;
 	struct readerNode *readerListHead;
@@ -187,13 +187,13 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		osp_spin_lock(&(d->mutex)); //lock our current ramdisk file to work on
 		//release all locks current process holds
 		if (d->numReadLocks != 0){//clear any read locks associated with process on the file
-			readerNode *traverse;
+			struct readerNode *traverse;
 			traverse = d->readerListHead;
 			//spot check if there's only one node
 			while (traverse->next != NULL){
 				if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
 					//check if we're at the last
-					readerNode *temp = traverse; //get a temp to point to current node so we can delete
+					struct readerNode *temp = traverse; //get a temp to point to current node so we can delete
 					traverse->prev->next = traverse->next;//re-link
 					traverse->next->prev = traverse->prev;
 					if(traverse == d->readerListHead){//if we're at the head, we need to change the head ptr
@@ -210,7 +210,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			}
 		}
 		if(d->writeLockPid == current->pid){//clear the write lock if the process owns it
-			d->isWriteLocked = false;
+			d->isWriteLocked = 0;
 		}
 		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
 			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
@@ -340,6 +340,7 @@ static void osprd_setup(osprd_info_t *d)
 	/* Add code here if you add fields to osprd_info_t. */
 	numReadLocks = 0;
 	numWriteLocks = 0;
+	isWriteLocked = 0;
 	writeLockPid = 0;
 	ticketListHead = malloc(sizeof(struct ticketNode));
 	ticketListHead->ticketNum = 0;
