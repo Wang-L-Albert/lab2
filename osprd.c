@@ -338,15 +338,15 @@ static void osprd_setup(osprd_info_t *d)
 	osp_spin_lock_init(&d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
-	numReadLocks = 0;
-	isWriteLocked = 0;
-	writeLockPid = 0;
-	ticketListHead = malloc(sizeof(struct ticketNode));
-	ticketListHead->ticketNum = 0;
-	ticketListHead->next = NULL;
-	readerListHead = malloc(sizeof(struct readerNode));
-	readerListHead->pid = 0;
-	readerListHead->next = NULL;
+	d->numReadLocks = 0;
+	d->isWriteLocked = 0;
+	d->writeLockPid = 0;
+	d->ticketListHead = malloc(sizeof(struct ticketNode));
+	d->ticketListHead->ticketNum = 0;
+	d->ticketListHead->next = NULL;
+	d->readerListHead = malloc(sizeof(struct readerNode));
+	d->readerListHead->pid = 0;
+	d->readerListHead->next = NULL;
 }
 
 
