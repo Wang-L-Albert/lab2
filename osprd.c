@@ -214,7 +214,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		}
 		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
 			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
-			wake_up_all(d->blockq); //wake up all tasks blocked by filp holding the lock
+			wake_up_all(&(d->blockq)); //wake up all tasks blocked by filp holding the lock
 		}
 		osp_spin_unlock(&(d->mutex));
 
@@ -339,7 +339,6 @@ static void osprd_setup(osprd_info_t *d)
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
 	numReadLocks = 0;
-	numWriteLocks = 0;
 	isWriteLocked = 0;
 	writeLockPid = 0;
 	ticketListHead = malloc(sizeof(struct ticketNode));
