@@ -151,7 +151,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	} else if (requestType == WRITE){
 		memcpy((void*) dataPtr, (void*) req->buffer, dataSize); //copy from request's buffer to ramdisk
 	} else{
-		eprintl("Request of was of an unknown command. \n");
+		eprintk("Request of was of an unknown command. \n");
 		end_request(req, 0);
 	}
 
@@ -204,7 +204,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 						d->readerListHead = traverse->next;
 					}
 					traverse = traverse->next; //advance traverser
-					free(temp);
+					kfree(temp);
 					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
 				}
 			}
@@ -307,7 +307,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			//here, listEnd points to the last ticket in the list, which should be blank and ready for use
 			listEnd->ticketNum = ticket;
-			struct ticketNode *newTicket = malloc (sizeof(struct ticketNode)); //create a new ticket for the next one to grab
+			struct ticketNode *newTicket = kmalloc (sizeof(struct ticketNode), 0); //create a new ticket for the next one to grab
 			newTicket->ticketNum = 0; //create the new ticket
 			newTicket->next = NULL;
 			listEnd->next = newTicket; //add to the end of the queue
@@ -322,7 +322,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0))){
 				//signal checking. if we're here, wait was interrupted. give up lock
 				d->ticket_tail--;
-				free(newTicket);//drop the new ticket we made
+				kfree(newTicket);//drop the new ticket we made
 				listEnd->ticketNum = 0; //undo the change we made to prev ticket
 				listEnd->next = NULL;
 				return -ERESTARTSYS;
@@ -335,7 +335,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			//for read requests, we only care that there are no current writes. reads are okay
 			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0))){
 				d->ticket_tail--;
-				free(newTicket);//drop the new ticket we made
+				kfree(newTicket);//drop the new ticket we made
 				listEnd->ticketNum = 0; //undo the change we made to prev ticket
 				listEnd->next = NULL;
 				return -ERESTARTSYS;
@@ -348,7 +348,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				readerListEnd = readerListEnd->next;
 			}
 			readerListEnd->pid = current->pid;
-			struct readerNode *newTicket = malloc (sizeof(struct readerNode)); //create a new ticket for the next one to grab
+			struct readerNode *newTicket = kmalloc (sizeof(struct readerNode),0); //create a new ticket for the next one to grab
 			newTicket->pid = 0; //create the new ticket
 			newTicket->next = NULL;
 			readerListEnd->next = newTicket; //add t
@@ -385,7 +385,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			//here, listEnd points to the last ticket in the list, which should be blank and ready for use
 			listEnd->ticketNum = ticket;
-			struct ticketNode *newTicket = malloc (sizeof(struct ticketNode)); //create a new ticket for the next one to grab
+			struct ticketNode *newTicket = kmalloc (sizeof(struct ticketNode),0 ); //create a new ticket for the next one to grab
 			newTicket->ticketNum = 0; //create the new ticket
 			newTicket->next = NULL;
 			listEnd->next = newTicket; //add to the end of the queue
@@ -400,10 +400,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if ((d->ticket_head == ticket) || (d->numReadLocks == 0) || (d->isWriteLocked == 0)){
 				//signal checking. if we're here, wait was interrupted. give up lock
 				d->ticket_tail--;
-				free(newTicket);//drop the new ticket we made
+				kfree(newTicket);//drop the new ticket we made
 				listEnd->ticketNum = 0; //undo the change we made to prev ticket
 				listEnd->next = NULL;
-				return -EBUSY
+				return -EBUSY;
 			}
 			osp_spin_lock_init(&(d->mutex));
 			d->isWriteLocked = 1; //get the write lock
@@ -413,10 +413,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			//for read requests, we only care that there are no current writes. reads are okay
 			if ((d->ticket_head == ticket) || (d->isWriteLocked == 0)){
 				d->ticket_tail--;
-				free(newTicket);//drop the new ticket we made
+				kfree(newTicket);//drop the new ticket we made
 				listEnd->ticketNum = 0; //undo the change we made to prev ticket
 				listEnd->next = NULL;
-				return -EBUSY
+				return -EBUSY;
 			}
 			//multiple readlocks can be held, so make sure that bit isnt already set
 
@@ -426,7 +426,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				readerListEnd = readerListEnd->next;
 			}
 			readerListEnd->pid = current->pid;
-			struct readerNode *newTicket = malloc (sizeof(struct readerNode)); //create a new ticket for the next one to grab
+			struct readerNode *newTicket = kmalloc (sizeof(struct readerNode),0); //create a new ticket for the next one to grab
 			newTicket->pid = 0; //create the new ticket
 			newTicket->next = NULL;
 			readerListEnd->next = newTicket; //add t
@@ -468,10 +468,10 @@ static void osprd_setup(osprd_info_t *d)
 	d->numReadLocks = 0;
 	d->isWriteLocked = 0;
 	d->writeLockPid = 0;
-	d->ticketListHead = (struct ticketNode *) malloc(sizeof(struct ticketNode));
+	d->ticketListHead = (struct ticketNode *) kmalloc(sizeof(struct ticketNode),0);
 	d->ticketListHead->ticketNum = 0;
 	d->ticketListHead->next = NULL;
-	d->readerListHead = (struct readerNode*) malloc(sizeof(struct readerNode));
+	d->readerListHead = (struct readerNode*) kmalloc(sizeof(struct readerNode),0);
 	d->readerListHead->pid = 0;
 	d->readerListHead->next = NULL;
 }
