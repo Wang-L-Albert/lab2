@@ -300,7 +300,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}else {*/
 			struct ticketNode *listEnd = d->ticketListHead;
 			while (listEnd->next != NULL){//traverse until listEnd points to the end of the ticketList
-				listEnd = ListEnd->next;
+				listEnd = listEnd->next;
 			}
 			//here, listEnd points to the last ticket in the list, which should be blank and ready for use
 			listEnd->ticketNum = ticket;
@@ -312,7 +312,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	//	}
 		if (filp_writable){ //if file is open for writing
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
-			wait_event_interruptible(&(d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0));
+			wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0));
 			filp->f_flags |= F_OSPRD_LOCKED; //let everyone know we have the lock
 			osp_spin_lock_init(&(d->mutex));
 			d->isWriteLocked = 1; //get the write lock
@@ -320,7 +320,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			osp_spin_unlock(&(d->mutex));
 		} else { //we want to grab a read lock instead
 			//for read requests, we only care that there are no current writes. reads are okay
-			wait_event_interruptible(&(d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0));
+			wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0));
 			//multiple readlocks can be held, so make sure that bit isnt already set
 			filp->f_flags |= F_OSPRD_LOCKED; //does this set regardless of state? ^= seems to be how you toggle
 			osp_spin_lock_init(&(d->mutex)); //add ticket to readerlist, and increment number of readers
