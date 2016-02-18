@@ -201,7 +201,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 					}
 					traverse = traverse->next; //advance traverser
 					free(temp);
-					numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
+					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
 				}
 			}
 			if (traverse->next == NULL){
@@ -298,21 +298,21 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			ticketListHead->ticketNum = ticket;
 			ticketListHead->next = NULL;
 		}else {*/
-			struct ticketNode *ListEnd = d->ticketListHead;
+			struct ticketNode *listEnd = d->ticketListHead;
 			while (listEnd->next != NULL){//traverse until listEnd points to the end of the ticketList
 				listEnd = ListEnd->next;
 			}
 			//here, listEnd points to the last ticket in the list, which should be blank and ready for use
 			listEnd->ticketNum = ticket;
-			struct ticketNode *newTicket = malloc (sizeof(ticketNode)); //create a new ticket for the next one to grab
+			struct ticketNode *newTicket = malloc (sizeof(struct ticketNode)); //create a new ticket for the next one to grab
 			newTicket->ticketNum = 0; //create the new ticket
-			mewTicket->next = NULL;
+			newTicket->next = NULL;
 			listEnd->next = newTicket; //add to the end of the queue
 			newTicket->prev = listEnd;
 	//	}
 		if (filp_writable){ //if file is open for writing
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
-			wait_event_interruptible(&(d->blockq), d->ticket_head == ticket && d->numReadLocks == 0 && d->isWriteLocked == 0);
+			wait_event_interruptible(&(d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0));
 			filp->f_flags |= F_OSPRD_LOCKED; //let everyone know we have the lock
 			osp_spin_lock_init(&(d->mutex));
 			d->isWriteLocked = 1; //get the write lock
@@ -320,7 +320,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			osp_spin_unlock(&(d->mutex));
 		} else { //we want to grab a read lock instead
 			//for read requests, we only care that there are no current writes. reads are okay
-			wait_event_interruptible(&(d->blockq), d->ticket_head == ticket && d->isWriteLocked == 0);
+			wait_event_interruptible(&(d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0));
 			//multiple readlocks can be held, so make sure that bit isnt already set
 			filp->f_flags |= F_OSPRD_LOCKED; //does this set regardless of state? ^= seems to be how you toggle
 			osp_spin_lock_init(&(d->mutex)); //add ticket to readerlist, and increment number of readers
@@ -329,7 +329,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				readerListEnd = readerListEnd->next;
 			}
 			readerListEnd->pid = current->pid;
-			struct readerNode *newTicket = malloc (sizeof(readerNode)); //create a new ticket for the next one to grab
+			struct readerNode *newTicket = malloc (sizeof(struct readerNode)); //create a new ticket for the next one to grab
 			newTicket->pid = 0; //create the new ticket
 			mewTicket->next = NULL;
 			readerListEnd->next = newTicket; //add t
