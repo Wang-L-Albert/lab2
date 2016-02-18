@@ -331,7 +331,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			readerListEnd->pid = current->pid;
 			struct readerNode *newTicket = malloc (sizeof(struct readerNode)); //create a new ticket for the next one to grab
 			newTicket->pid = 0; //create the new ticket
-			mewTicket->next = NULL;
+			newTicket->next = NULL;
 			readerListEnd->next = newTicket; //add t
 			newTicket->prev = readerListEnd;
 			d->numReadLocks++;
