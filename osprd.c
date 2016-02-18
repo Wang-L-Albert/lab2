@@ -452,7 +452,38 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// you need, and return 0.
 
 		// Your code here (instead of the next line).
-		r = -ENOTTY;
+
+		//if trying to get rid of read
+		//check if read lock exists, check with pid and readerNodes
+		//
+		if(!(filp->f_flags & F_OSPRD_LOCKED)) //fiel has no lock
+		{
+			return -EINVAL;
+		}
+		osp_spin_lock(&(d->mutex));
+		if(filp_writable) //looking for write lock
+		{
+			if(d->isWriteLocked == 0)//check if there is a write lock
+			{
+				osp_spin_unlock(&(d->mutex)); //nothing to unlock if no write lock
+				return -EINVAL;
+			}
+			isWriteLocked = 0; //unlock
+			writeLockPid = -1;
+		} else { //looking for read lock
+			if() //check for read lock 
+			{
+			while (readerListEnd->next != NULL){//traverse until listEnd points to the end of the readerList
+				readerListEnd = readerListEnd->next;
+			}
+				osp_spin_unlock(&(d->mutex));
+				return -EINVAL;
+			}
+		}
+		osp_spin_unlock(&d->mutex);
+		filp->f_flags &= (~F_OSPRD_LOCKED);
+		wake_up_all(&d->blockq);
+		r = 0;
 
 	} else
 		r = -ENOTTY; /* unknown command */
