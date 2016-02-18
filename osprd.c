@@ -385,7 +385,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				free(newTicket);//drop the new ticket we made
 				listEnd->ticketNum = 0; //undo the change we made to prev ticket
 				listEnd->next = NULL;
-				return -EBUSY
+				return -EBUSY;
 			}
 			osp_spin_lock_init(&(d->mutex));
 			d->isWriteLocked = 1; //get the write lock
@@ -398,7 +398,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				free(newTicket);//drop the new ticket we made
 				listEnd->ticketNum = 0; //undo the change we made to prev ticket
 				listEnd->next = NULL;
-				return -EBUSY
+				return -EBUSY;
 			}
 			//multiple readlocks can be held, so make sure that bit isnt already set
 
