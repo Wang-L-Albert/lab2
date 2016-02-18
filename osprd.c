@@ -140,7 +140,8 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	unsigned int requestType;
 	uint8_t *dataPtr;
-	int dataSize = req->current_nr_sectors * SECTOR_SIZE; //size of data to be copied, nr_sectors is num sectors to be copied
+	int dataSize;
+	dataSize = req->current_nr_sectors * SECTOR_SIZE; //size of data to be copied, nr_sectors is num sectors to be copied
 
 	requestType = rq_data_dir(req); //get the request type
 	dataPtr = d->data + (req->sector * SECTOR_SIZE); //get a pointer to the location on disk where we need to write
@@ -149,6 +150,9 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		memcpy((void*) req->buffer, (void*) dataPtr, dataSize); //copy from ramdisk to request's buffer
 	} else if (requestType == WRITE){
 		memcpy((void*) dataPtr, (void*) req->buffer, dataSize); //copy from request's buffer to ramdisk
+	} else{
+		eprintl("Request of was of an unknown command. \n");
+		end_request(req, 0);
 	}
 
 
@@ -215,10 +219,9 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		}
 		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
 			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
-			wake_up_all(&(d->blockq)); //wake up all tasks blocked by filp holding the lock
 		}
 		osp_spin_unlock(&(d->mutex));
-
+		wake_up_all(&(d->blockq)); //wake up all tasks blocked by filp holding the lock
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
 
@@ -381,10 +384,10 @@ static void osprd_setup(osprd_info_t *d)
 	d->numReadLocks = 0;
 	d->isWriteLocked = 0;
 	d->writeLockPid = 0;
-	d->ticketListHead = malloc(sizeof(struct ticketNode));
+	d->ticketListHead = (struct ticketNode *) malloc(sizeof(struct ticketNode));
 	d->ticketListHead->ticketNum = 0;
 	d->ticketListHead->next = NULL;
-	d->readerListHead = malloc(sizeof(struct readerNode));
+	d->readerListHead = (struct readerNode*) malloc(sizeof(struct readerNode));
 	d->readerListHead->pid = 0;
 	d->readerListHead->next = NULL;
 }
