@@ -313,35 +313,19 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			listEnd->next = newTicket; //add to the end of the queue
 			newTicket->prev = listEnd;
 	//	}
-		//check if we already have a write lock, if we do we cannot request another lock
-		if (d->writeLockPid == current->pid){
-			return -EDEADLK;
-		}
 		if (filp_writable){ //if file is open for writing
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
-			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0))){
-				//signal checking. if we're here, wait was interrupted. give up lock
-				d->ticket_tail--;
-				free(newTicket);//drop the new ticket we made
-				listEnd->ticketNum = 0; //undo the change we made to prev ticket
-				listEnd->next = NULL;
-				return -ERESTARTSYS;
-			}
+			wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0));
+			filp->f_flags |= F_OSPRD_LOCKED; //let everyone know we have the lock
 			osp_spin_lock_init(&(d->mutex));
 			d->isWriteLocked = 1; //get the write lock
 			d->writeLockPid = current->pid; //set process' pid to the writelock
 			osp_spin_unlock(&(d->mutex));
 		} else { //we want to grab a read lock instead
 			//for read requests, we only care that there are no current writes. reads are okay
-			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0))){
-				d->ticket_tail--;
-				free(newTicket);//drop the new ticket we made
-				listEnd->ticketNum = 0; //undo the change we made to prev ticket
-				listEnd->next = NULL;
-				return -ERESTARTSYS;
-			}
+			wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0));
 			//multiple readlocks can be held, so make sure that bit isnt already set
-
+			filp->f_flags |= F_OSPRD_LOCKED; //does this set regardless of state? ^= seems to be how you toggle
 			osp_spin_lock_init(&(d->mutex)); //add ticket to readerlist, and increment number of readers
 			struct readerNode *readerListEnd = d->readerListHead;
 			while (readerListEnd->next != NULL){//traverse until listEnd points to the end of the readerList
@@ -356,9 +340,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			d->numReadLocks++;
 			osp_spin_unlock(&(d->mutex));
 		}
-		filp->f_flags |= F_OSPRD_LOCKED; //does this set regardless of state? ^= seems to be how you toggle
-		d->ticket_head++;
-		return 0;
+
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -381,7 +363,15 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// the wait queue, perform any additional accounting steps
 		// you need, and return 0.
 
-		// Your code here (instead of the next line).
+		// Your code here (instead of the next line)
+
+		if(!(filp->f_flags && F_OSPRD_LOCKED)) //not locked ramdisk
+		{
+			return -EINVAL;
+		}
+
+		osp_spin_lock(&(d->mutex)); //lock current ramdisk
+
 		r = -ENOTTY;
 
 	} else
