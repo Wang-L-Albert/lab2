@@ -397,7 +397,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		if (filp_writable){ //if file is open for writing
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
-			if ((d->ticket_head == ticket) || (d->numReadLocks == 0) || (d->isWriteLocked == 0))){
+			if ((d->ticket_head == ticket) || (d->numReadLocks == 0) || (d->isWriteLocked == 0)){
 				//signal checking. if we're here, wait was interrupted. give up lock
 				d->ticket_tail--;
 				free(newTicket);//drop the new ticket we made
@@ -411,7 +411,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			osp_spin_unlock(&(d->mutex));
 		} else { //we want to grab a read lock instead
 			//for read requests, we only care that there are no current writes. reads are okay
-			if ((d->ticket_head == ticket) || (d->isWriteLocked == 0))){
+			if ((d->ticket_head == ticket) || (d->isWriteLocked == 0)){
 				d->ticket_tail--;
 				free(newTicket);//drop the new ticket we made
 				listEnd->ticketNum = 0; //undo the change we made to prev ticket
