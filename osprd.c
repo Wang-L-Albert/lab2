@@ -198,10 +198,12 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 				if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
 					//check if we're at the last
 					struct readerNode *temp = traverse; //get a temp to point to current node so we can delete
-					traverse->prev->next = traverse->next;//re-link
-					traverse->next->prev = traverse->prev;
-					if(traverse == d->readerListHead){//if we're at the head, we need to change the head ptr
-						d->readerListHead = traverse->next;
+					if(traverse != d->readerListHead){//if not first node
+						traverse->prev->next = traverse->next;//re-link
+						traverse->next->prev = traverse->prev;
+					} else {
+						d->readerListHead = traverse->next;//if is first node
+						traverse->next->prev = NULL;
 					}
 					traverse = traverse->next; //advance traverser
 					kfree(temp);
