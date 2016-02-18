@@ -463,7 +463,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		osp_spin_lock(&(d->mutex));
 		if(filp_writable) //looking for write lock
 		{
-			if(d->isWriteLocked == 0)//check if there is a write lock
+			if(d->isWriteLocked == 0)//looking for write lock
 			{
 				osp_spin_unlock(&(d->mutex)); //nothing to unlock if no write lock
 				return -EINVAL;
@@ -471,13 +471,36 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			isWriteLocked = 0; //unlock
 			writeLockPid = -1;
 		} else { //looking for read lock
-			if() //check for read lock 
-			{
-			while (readerListEnd->next != NULL){//traverse until listEnd points to the end of the readerList
-				readerListEnd = readerListEnd->next;
-			}
+			if(numReadLocks == 0) //nothing to unlock if no read locks
+			{ //was it supposed to check for nodes of current pid
 				osp_spin_unlock(&(d->mutex));
 				return -EINVAL;
+			}
+			//delete all nodes of cur pid in reader list
+			struct readerNode* itr = struct readerListHead;
+
+			while(itr!=NULL)
+			{
+				if(itr->pid == current->pid)
+				{
+					//delete object
+					//free kernel memory
+					//ret
+					//numReadLocks decrement
+				}
+				struct itr = struct itr->next;
+			}
+
+
+
+
+			if(numReadLocks > 0) //no lock
+			{
+				while(numReadLocks > 0) //keep decrementing
+				{
+
+				}
+				
 			}
 		}
 		osp_spin_unlock(&d->mutex);
@@ -489,6 +512,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		r = -ENOTTY; /* unknown command */
 	return r;
 }
+
 
 
 // Initialize internal fields for an osprd_info_t.
