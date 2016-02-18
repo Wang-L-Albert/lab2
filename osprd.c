@@ -294,7 +294,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		unsigned ticket;
 		osp_spin_lock(&(d->mutex));
 		ticket = d->ticket_tail++; //set own ticket number to ticket_tail, the next available ticket slot;
-		osp_spin_unlock(&(d->mutex));
+
 		//now add ticket into the array
 		//if ticket_head is already == ticket,then we dont have traverse, set head to curr ticket
 	/*	if (d->ticket_head == ticket){
@@ -313,18 +313,27 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			listEnd->next = newTicket; //add to the end of the queue
 			newTicket->prev = listEnd;
 	//	}
+
 		//check if we already have a write lock, if we do we cannot request another lock
 		if (d->writeLockPid == current->pid){
+			osp_spin_unlock(&(d->mutex));
 			return -EDEADLK;
 		}
+		osp_spin_unlock(&(d->mutex));
 		if (filp_writable){ //if file is open for writing
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
 			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0))){
 				//signal checking. if we're here, wait was interrupted. give up lock
-				d->ticket_tail--;
-				kfree(newTicket);//drop the new ticket we made
-				listEnd->ticketNum = 0; //undo the change we made to prev ticket
-				listEnd->next = NULL;
+				osp_spin_lock(&(d->mutex))
+				if(listEnd != ticketListHead){
+					listEnd->prev->next = listEnd->next;
+					listEnd->next->prev = listEnd->prev;
+				} else {
+					ticketListHead = listEnd->next;
+					listEnd->next->prev = NULL;
+				}
+				kfree(listEnd);//drop the new ticket we made
+				osp_spin_unlock(&(d->mutex))
 				return -ERESTARTSYS;
 			}
 			osp_spin_lock(&(d->mutex));
@@ -334,10 +343,16 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		} else { //we want to grab a read lock instead
 			//for read requests, we only care that there are no current writes. reads are okay
 			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0))){
-				d->ticket_tail--;
-				kfree(newTicket);//drop the new ticket we made
-				listEnd->ticketNum = 0; //undo the change we made to prev ticket
-				listEnd->next = NULL;
+				osp_spin_lock(&(d->mutex))
+				if(listEnd != ticketListHead){
+					listEnd->prev->next = listEnd->next;
+					listEnd->next->prev = listEnd->prev;
+				} else {
+					ticketListHead = listEnd->next;
+					listEnd->next->prev = NULL;
+				}
+				kfree(listEnd);//drop the new ticket we made
+				osp_spin_unlock(&(d->mutex))
 				return -ERESTARTSYS;
 			}
 			//multiple readlocks can be held, so make sure that bit isnt already set
@@ -357,7 +372,24 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			osp_spin_unlock(&(d->mutex));
 		}
 		filp->f_flags |= F_OSPRD_LOCKED; //does this set regardless of state? ^= seems to be how you toggle
-		d->ticket_head++;
+		//check if first ticket
+		//toss out ticket
+		osp_spin_lock(&(d->mutex));
+		if(listEnd != ticketListHead){
+			listEnd->prev->next = listEnd->next;
+			listEnd->next->prev = listEnd->prev;
+		} else {
+			ticketListHead = listEnd->next;
+			listEnd->next->prev = NULL;
+		}
+		kfree(listEnd);//drop the new ticket we made
+		osp_spin_unlock(&(d->mutex));
+
+		if (ticketListHead->next == NULL){
+			d->ticket_head = d->ticket_tail;
+		} else {
+			d->ticket_head = ticketListHead->ticketNum;
+		}
 		return 0;
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
