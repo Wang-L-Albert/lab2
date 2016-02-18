@@ -324,16 +324,16 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
 			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->numReadLocks == 0) && (d->isWriteLocked == 0))){
 				//signal checking. if we're here, wait was interrupted. give up lock
-				osp_spin_lock(&(d->mutex))
-				if(listEnd != ticketListHead){
+				osp_spin_lock(&(d->mutex));
+				if(listEnd != d->ticketListHead){
 					listEnd->prev->next = listEnd->next;
 					listEnd->next->prev = listEnd->prev;
 				} else {
-					ticketListHead = listEnd->next;
+					d->ticketListHead = listEnd->next;
 					listEnd->next->prev = NULL;
 				}
 				kfree(listEnd);//drop the new ticket we made
-				osp_spin_unlock(&(d->mutex))
+				osp_spin_unlock(&(d->mutex));
 				return -ERESTARTSYS;
 			}
 			osp_spin_lock(&(d->mutex));
@@ -343,16 +343,16 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		} else { //we want to grab a read lock instead
 			//for read requests, we only care that there are no current writes. reads are okay
 			if (wait_event_interruptible((d->blockq), (d->ticket_head == ticket) && (d->isWriteLocked == 0))){
-				osp_spin_lock(&(d->mutex))
-				if(listEnd != ticketListHead){
+				osp_spin_lock(&(d->mutex));
+				if(listEnd != d->ticketListHead){
 					listEnd->prev->next = listEnd->next;
 					listEnd->next->prev = listEnd->prev;
 				} else {
-					ticketListHead = listEnd->next;
+					d->ticketListHead = listEnd->next;
 					listEnd->next->prev = NULL;
 				}
 				kfree(listEnd);//drop the new ticket we made
-				osp_spin_unlock(&(d->mutex))
+				osp_spin_unlock(&(d->mutex));
 				return -ERESTARTSYS;
 			}
 			//multiple readlocks can be held, so make sure that bit isnt already set
@@ -375,20 +375,20 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		//check if first ticket
 		//toss out ticket
 		osp_spin_lock(&(d->mutex));
-		if(listEnd != ticketListHead){
+		if(listEnd != d->ticketListHead){
 			listEnd->prev->next = listEnd->next;
 			listEnd->next->prev = listEnd->prev;
 		} else {
-			ticketListHead = listEnd->next;
+			d->ticketListHead = listEnd->next;
 			listEnd->next->prev = NULL;
 		}
 		kfree(listEnd);//drop the new ticket we made
 		osp_spin_unlock(&(d->mutex));
 
-		if (ticketListHead->next == NULL){
+		if (d->ticketListHead->next == NULL){
 			d->ticket_head = d->ticket_tail;
 		} else {
-			d->ticket_head = ticketListHead->ticketNum;
+			d->ticket_head = d->ticketListHead->ticketNum;
 		}
 		return 0;
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
