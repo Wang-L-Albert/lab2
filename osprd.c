@@ -213,10 +213,11 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			if (traverse->next == NULL){
 				if(traverse->pid == current->pid){
 					traverse->pid = 0;
+					d->numReadLocks--;
 				}
 			}
 		}
-		if(d->writeLockPid == current->pid){//clear the write lock if the process owns it
+		if(d->isWriteLocked && d->writeLockPid == current->pid){//clear the write lock if the process owns it
 			d->isWriteLocked = 0;
 		}
 		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
@@ -293,6 +294,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
+		if (d->isWriteLocked && d->writeLockPid == current->pid){
+			return -EDEADLK;
+		}
+
 		unsigned ticket;
 		osp_spin_lock(&(d->mutex));
 		ticket = d->ticket_tail++; //set own ticket number to ticket_tail, the next available ticket slot;
@@ -317,10 +322,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	//	}
 
 		//check if we already have a write lock, if we do we cannot request another lock
-		if (d->writeLockPid == current->pid){
-			osp_spin_unlock(&(d->mutex));
-			return -EDEADLK;
-		}
 		osp_spin_unlock(&(d->mutex));
 		if (filp_writable){ //if file is open for writing
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
@@ -385,13 +386,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			listEnd->next->prev = NULL;
 		}
 		kfree(listEnd);//drop the new ticket we made
-		osp_spin_unlock(&(d->mutex));
 
 		if (d->ticketListHead->next == NULL){
 			d->ticket_head = d->ticket_tail;
 		} else {
 			d->ticket_head = d->ticketListHead->ticketNum;
 		}
+		osp_spin_unlock(&(d->mutex));
 		return 0;
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
