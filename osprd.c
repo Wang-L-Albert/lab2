@@ -193,7 +193,6 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		if (d->numReadLocks != 0){//clear any read locks associated with process on the file
 			struct readerNode *traverse;
 			traverse = d->readerListHead;
-			//spot check if there's only one node
 			while (traverse->next != NULL){
 				if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
 					//check if we're at the last
@@ -210,14 +209,8 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
 				}
 			}
-			if (traverse->next == NULL){
-				if(traverse->pid == current->pid){
-					traverse->pid = -1;
-					d->numReadLocks--;
-				}
-			}
 		}
-		if(d->isWriteLocked && d->writeLockPid == current->pid){//clear the write lock if the process owns it
+		if((d->isWriteLocked) && (d->writeLockPid == current->pid)){//clear the write lock if the process owns it
 			d->isWriteLocked = 0;
 			d->writeLockPid = -1;
 		}
@@ -226,9 +219,6 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		}
 		osp_spin_unlock(&(d->mutex));
 		wake_up_all(&(d->blockq)); //wake up all tasks blocked by filp holding the lock
-		// This line avoids compiler warnings; you may remove it.
-		(void) filp_writable, (void) d;
-
 	}
 
 	return 0;
@@ -296,14 +286,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next two lines).
 		//if file is already write locked, and we own it, this is deadlock so return
+		osp_spin_lock(&(d->mutex));
 		if ((d->isWriteLocked) && (d->writeLockPid == current->pid)){
 			return -EDEADLK;
 		}
 
 		unsigned ticket;
-		osp_spin_lock(&(d->mutex));
 		ticket = d->ticket_tail++; //set own ticket number to ticket_tail, the next available ticket slot;
-
 		//now add ticket into the array
 		//if ticket_head is already == ticket,then we dont have traverse, set head to curr ticket
 	/*	if (d->ticket_head == ticket){
@@ -316,7 +305,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			//here, listEnd points to the last ticket in the list, which should be blank and ready for use
 			listEnd->ticketNum = ticket;
-			struct ticketNode *newTicket = kmalloc (sizeof(struct ticketNode), 0); //create a new ticket for the next one to grab
+			struct ticketNode *newTicket = kmalloc (sizeof(struct ticketNode), GFP_ATOMIC); //create a new ticket for the next one to grab
 			newTicket->ticketNum = -1; //create the new ticket
 			newTicket->next = NULL;
 			listEnd->next = newTicket; //add to the end of the queue
@@ -371,7 +360,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				readerListEnd = readerListEnd->next;
 			}
 			readerListEnd->pid = current->pid;
-			struct readerNode *newTicket = kmalloc (sizeof(struct readerNode),0); //create a new ticket for the next one to grab
+			struct readerNode *newTicket = kmalloc (sizeof(struct readerNode),GFP_ATOMIC); //create a new ticket for the next one to grab
 			newTicket->pid = -1; //create the new ticket
 			newTicket->next = NULL;
 			readerListEnd->next = newTicket; //add t
@@ -435,7 +424,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				readerListEnd = readerListEnd->next;
 			}
 			readerListEnd->pid = current->pid;
-			struct readerNode *newTicket = kmalloc (sizeof(struct readerNode),0); //create a new ticket for the next one to grab
+			struct readerNode *newTicket = kmalloc (sizeof(struct readerNode),GFP_ATOMIC); //create a new ticket for the next one to grab
 			newTicket->pid = 0; //create the new ticket
 			newTicket->next = NULL;
 			readerListEnd->next = newTicket; //add t
@@ -514,7 +503,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 					kfree(temp);
 					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
 				}
-			}	
+			}
 		}
 		osp_spin_unlock(&d->mutex);
 		filp->f_flags &= (~F_OSPRD_LOCKED);
@@ -540,10 +529,10 @@ static void osprd_setup(osprd_info_t *d)
 	d->numReadLocks = 0;
 	d->isWriteLocked = 0;
 	d->writeLockPid = -1;
-	d->ticketListHead = (struct ticketNode *) kmalloc(sizeof(struct ticketNode),0);
+	d->ticketListHead = (struct ticketNode *) kmalloc(sizeof(struct ticketNode),GFP_ATOMIC);
 	d->ticketListHead->ticketNum = -1;
 	d->ticketListHead->next = NULL;
-	d->readerListHead = (struct readerNode*) kmalloc(sizeof(struct readerNode),0);
+	d->readerListHead = (struct readerNode*) kmalloc(sizeof(struct readerNode),GFP_ATOMIC);
 	d->readerListHead->pid = -1;
 	d->readerListHead->next = NULL;
 }
