@@ -463,7 +463,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		osp_spin_lock(&(d->mutex));
 		if(filp_writable) //looking for write lock
 		{
-			if(d->isWriteLocked == 0)//looking for write lock
+			if(d->isWriteLocked > 0)//someoneone else has a lock on it
 			{
 				osp_spin_unlock(&(d->mutex)); //nothing to unlock if no write lock
 				return -EINVAL;
@@ -471,8 +471,8 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			isWriteLocked = 0; //unlock
 			writeLockPid = -1;
 		} else { //looking for read lock
-			if(numReadLocks == 0) //nothing to unlock if no read locks
-			{ //was it supposed to check for nodes of current pid
+			if(numReadLocks == 0) //nothing to unlock for this pid THIS NEEDS TO BE FIXED
+			{ 
 				osp_spin_unlock(&(d->mutex));
 				return -EINVAL;
 			}
@@ -481,8 +481,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 			while(itr!=NULL)
 			{
+				struct itr = struct itr->next;
 				if(itr->pid == current->pid)
 				{
+					kfree(temp);
+					d->numReadLocks--;
 					//delete object
 					//free kernel memory
 					//ret
