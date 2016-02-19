@@ -542,8 +542,9 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 					traverse = traverse->next; //advance traverser
 					kfree(temp);
 					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
+				} else {
+					traverse = traverse->next;
 				}
-				traverse = traverse->next;
 			}
 		}
 		eprintk("REALEASE DONE\n");
