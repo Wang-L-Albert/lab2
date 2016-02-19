@@ -182,56 +182,58 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 	if (filp) {
 		osprd_info_t *d = file2osprd(filp);
 		int filp_writable = filp->f_mode & FMODE_WRITE;
-		eprintk("is write locked:    %d  \n",d->isWriteLocked);
 		// ------DONE?------EXERCISE: If the user closes a ramdisk file that holds
 		// a lock, release the lock.  Also wake up blocked processes
 		// as appropriate.
 
 		// Your code here.
-		//release lock //wake up all tasks blocked by filp holding the lock
-		osp_spin_lock(&(d->mutex)); //lock our current ramdisk file to work on
-		//release all locks current process holds
-		eprintk("is write locked1:    %d  \n",d->isWriteLocked);
-		eprintk("close last: numReadLocks: %d \n", d->numReadLocks);
-		if (d->numReadLocks != 0){//clear any read locks associated with process on the file
-			struct readerNode *traverse;
-			traverse = d->readerListHead;
-			while (traverse->next != NULL){
-				eprintk("Traversing pid in close last: %d\n", traverse->pid);
-				eprintk("TRAVERSALS NEXT NODE'S PID:    %d  \n",traverse->next->pid);
-				if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
-					//check if we're at the last
-					struct readerNode *temp = traverse; //get a temp to point to current node so we can delete
-					if(traverse != d->readerListHead){//if not first node
-						traverse->prev->next = traverse->next;//re-link
-						traverse->next->prev = traverse->prev;
-					} else {
-						d->readerListHead = traverse->next;//if is first node
-						traverse->next->prev = NULL;
+		if (filp->f_flags & F_OSPRD_LOCKED){
+			//release lock //wake up all tasks blocked by filp holding the lock
+			osp_spin_lock(&(d->mutex)); //lock our current ramdisk file to work on
+			//eprintk("is write locked:    %d  \n",d->isWriteLocked);
+			//release all locks current process holds
+			//eprintk("is write locked1:    %d  \n",d->isWriteLocked);
+			eprintk("close last: numReadLocks: %d \n", d->numReadLocks);
+			if (d->numReadLocks != 0){//clear any read locks associated with process on the file
+				struct readerNode *traverse;
+				traverse = d->readerListHead;
+				while (traverse->next != NULL){
+					eprintk("Traversing pid in close last: %d, current pid %d\n", traverse->pid, current->pid);
+					//eprintk("TRAVERSALS NEXT NODE'S PID:    %d  \n",traverse->next->pid);
+					if(traverse->pid == current->pid){//if node has pid == current->pid, we need to remove from list of readers
+						//check if we're at the last
+						struct readerNode *temp = traverse; //get a temp to point to current node so we can delete
+						if(traverse != d->readerListHead){//if not first node
+							traverse->prev->next = traverse->next;//re-link
+							traverse->next->prev = traverse->prev;
+						} else {
+							d->readerListHead = traverse->next;//if is first node
+							traverse->next->prev = NULL;
+						}
+						 //advance traverser
+						traverse = traverse->next;
+						kfree(temp);
+						d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
+					} else{
+						traverse = traverse->next;
+						//eprintk("CLOSELAST TRAVERSALS\n");
 					}
-					 //advance traverser
-					traverse = traverse->next;
-					kfree(temp);
-					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
-				} else{
-					traverse = traverse->next;
-					eprintk("CLOSELAST TRAVERSALS\n");
 				}
 			}
+			//eprintk("is write locked:    %d  \n",d->isWriteLocked);
+			//eprintk("writeLockPid:    %d  \n",d->writeLockPid);
+			if((d->isWriteLocked) && (d->writeLockPid == current->pid)){//clear the write lock if the process owns it
+				d->isWriteLocked = 0;
+				d->writeLockPid = -1;
+				eprintk("releasing writelock in close last\n");
+			}
+			if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
+				filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
+			}
+			osp_spin_unlock(&(d->mutex));
+			wake_up_all(&(d->blockq)); //wake up all tasks blocked by filp holding the lock
+			//eprintk("CLOSELAST 1111111\n");
 		}
-		eprintk("is write locked:    %d  \n",d->isWriteLocked);
-		eprintk("writeLockPid:    %d  \n",d->writeLockPid);
-		if((d->isWriteLocked) && (d->writeLockPid == current->pid)){//clear the write lock if the process owns it
-			d->isWriteLocked = 0;
-			d->writeLockPid = -1;
-			eprintk("CLOSELAST 000000 \n");
-		}
-		if (filp->f_flags & F_OSPRD_LOCKED){//if file is holds a lock
-			filp->f_flags &= ~F_OSPRD_LOCKED; //clear the lock filp holds
-		}
-		osp_spin_unlock(&(d->mutex));
-		wake_up_all(&(d->blockq)); //wake up all tasks blocked by filp holding the lock
-		eprintk("CLOSELAST 1111111\n");
 	}
 
 	return 0;
@@ -299,13 +301,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next two lines).
 		//if file is already write locked, and we own it, this is deadlock so return
-		eprintk("ABOUT TO ACUIRE\n");
+		//eprintk("ABOUT TO ACUIRE\n");
 		osp_spin_lock(&(d->mutex));
 		if ((d->isWriteLocked) && (d->writeLockPid == current->pid)){
 			osp_spin_unlock(&(d->mutex));
 			return -EDEADLK;
 		}
-		eprintk("ACQUIREE 0000\n");
+		//eprintk("ACQUIREE 0000\n");
 
 		unsigned ticket;
 		ticket = d->ticket_tail++; //set own ticket number to ticket_tail, the next available ticket slot;
@@ -327,10 +329,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			listEnd->next = newTicket; //add to the end of the queue
 			newTicket->prev = listEnd;
 	//	}
-			eprintk("ACQUIRE 1a \n");
-
+			//eprintk("ACQUIRE 1a \n");
+		eprintk("ticket assigned: %d\n", ticket);
 		//check if we already have a write lock, if we do we cannot request another lock
-		eprintk("ACQUIRE 1a \n");
+		//eprintk("ACQUIRE 1a \n");
 		osp_spin_unlock(&(d->mutex));
 		if (filp_writable){ //if file is open for writing
 			//block until we're the next ticket to be executed, and we have free reign to get a lock
@@ -346,7 +348,14 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 					d->ticketListHead = listEnd->next;
 					listEnd->next->prev = NULL;
 				}
-				kfree(listEnd);//drop the new ticket we made
+				//eprintk("removing ticket: %d", listEnd->ticket
+				kfree(listEnd);//drop the new ticket we made	
+				if (d->ticketListHead->next == NULL){
+				//if null, no new tickets to serve, we set head -> tail for immediate update
+					d->ticket_head = d->ticket_tail;
+				} else {
+					d->ticket_head = d->ticketListHead->ticketNum;
+				}
 				osp_spin_unlock(&(d->mutex));
 				return -ERESTARTSYS;
 			}
@@ -370,6 +379,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 					listEnd->next->prev = NULL;
 				}
 				kfree(listEnd);//drop the new ticket we made
+				if (d->ticketListHead->next == NULL){
+				//if null, no new tickets to serve, we set head -> tail for immediate update
+					d->ticket_head = d->ticket_tail;
+				} else {
+					d->ticket_head = d->ticketListHead->ticketNum;
+				}
 				osp_spin_unlock(&(d->mutex));
 				return -ERESTARTSYS;
 			}
