@@ -459,12 +459,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			readerListEnd->pid = current->pid;
 			struct readerNode *newTicket = kmalloc (sizeof(struct readerNode),GFP_ATOMIC); //create a new ticket for the next one to grab
-			newTicket->pid = 0; //create the new ticket
+			newTicket->pid = -1; //create the new ticket
 			newTicket->next = NULL;
 			readerListEnd->next = newTicket; //add t
 			newTicket->prev = readerListEnd;
 			d->numReadLocks++;
-
 		}
 		osp_spin_unlock(&(d->mutex));
 		eprintk("TRYACQUIRE PASSEDLOCKSTUFF\n");
@@ -486,23 +485,25 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		//if trying to get rid of read
 		//check if read lock exists, check with pid and readerNodes
 		//
+		osp_spin_lock(&(d->mutex));
 		if(!(filp->f_flags & F_OSPRD_LOCKED)) //fiel has no lock
 		{
+			osp_spin_unlock(&(d->mutex));
 			return -EINVAL;
 		}
 		eprintk("REALEASE 0000\n");
-		osp_spin_lock(&(d->mutex));
+
 		if(filp_writable) //looking for write lock
 		{
-			if(d->isWriteLocked > 0)//someoneone else has a lock on it
+			if(d->isWriteLocked != current->pid)//someoneone else has a lock on it
 			{
 				osp_spin_unlock(&(d->mutex)); //nothing to unlock if no write lock
 				return -EINVAL;
 			}
 			d->isWriteLocked = 0; //unlock
 			d->writeLockPid = -1;
-			osp_spin_unlock(&(d->mutex));
-			return 0;
+			//osp_spin_unlock(&(d->mutex));
+			//return 0;
 		} else { //looking for read lock
 			eprintk("GONNA READLOCK RELEASE 0000\n");
 			if(d->numReadLocks==0)
