@@ -485,6 +485,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			d->isWriteLocked = 0; //unlock
 			d->writeLockPid = -1;
+			osp_spin_unlock(&(d->mutex));
 			return 0;
 		} else { //looking for read lock
 			eprintk("GONNA READLOCK RELEASE 0000\n");
