@@ -209,7 +209,6 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 						d->readerListHead = traverse->next;//if is first node
 						traverse->next->prev = NULL;
 					}
-					traverse = traverse->next;
 					 //advance traverser
 					kfree(temp);
 					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
