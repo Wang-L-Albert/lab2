@@ -495,7 +495,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		if(filp_writable) //looking for write lock
 		{
-			if(d->isWriteLocked != current->pid)//someoneone else has a lock on it
+			if(d->isWriteLocked > 0 && d->isWriteLocked != current->pid)//someoneone else has a lock on it
 			{
 				osp_spin_unlock(&(d->mutex)); //nothing to unlock if no write lock
 				return -EINVAL;
