@@ -472,16 +472,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_unlock(&(d->mutex)); //nothing to unlock if no write lock
 				return -EINVAL;
 			}
-			isWriteLocked = 0; //unlock
-			writeLockPid = -1;
+			d->isWriteLocked = 0; //unlock
+			d->writeLockPid = -1;
 			return 0;
 		} else { //looking for read lock
-			if(numReadLocks == 0) //nothing to unlock for this pid THIS NEEDS TO BE FIXED
-			{ 
-				osp_spin_unlock(&(d->mutex));
-				return -EINVAL;
-			}
-			//delete all nodes of cur pid in reader list
 			if(d->numReadLocks==0)
 			{
 				osp_spin_unlock(&(d->mutex)); //nothing to unlock if no readlocks
@@ -504,7 +498,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				return -EINVAL;
 			}
 
-			struct readerNode *traverse;
 			traverse = d->readerListHead;
 			//spot check if there's only one node
 			while (traverse->next != NULL){
