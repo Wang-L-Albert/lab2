@@ -210,11 +210,13 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 						traverse->next->prev = NULL;
 					}
 					 //advance traverser
+					traverse = traverse->next;
 					kfree(temp);
 					d->numReadLocks--; //if we've tossed out a readerlist node, that means we have 1 fewer reader
+				} else{
+					traverse = traverse->next;
+					eprintk("CLOSELAST TRAVERSALS\n");
 				}
-				traverse = traverse->next;
-				eprintk("CLOSELAST TRAVERSALS\n");
 			}
 		}
 		eprintk("is write locked:    %d  \n",d->isWriteLocked);
@@ -439,12 +441,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_unlock(&(d->mutex));
 				return -EBUSY;
 			}
-		
+
 			d->isWriteLocked = 1; //get the write lock
 			d->writeLockPid = current->pid; //set process' pid to the writelock
 		} else { //we want to grab a read lock instead
 			//since multiple read locks are allowed, we only return busy if there is a write lock
-			//osp_spin_lock(&(d->mutex)); 
+			//osp_spin_lock(&(d->mutex));
 			if ((d->isWriteLocked == 1)){
 				osp_spin_unlock(&(d->mutex));
 				return -EBUSY;
@@ -462,7 +464,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			readerListEnd->next = newTicket; //add t
 			newTicket->prev = readerListEnd;
 			d->numReadLocks++;
-			
+
 		}
 		osp_spin_unlock(&(d->mutex));
 		eprintk("TRYACQUIRE PASSEDLOCKSTUFF\n");
